@@ -165,25 +165,19 @@ function useStoredState(key, fallback) {
   const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const res = await window.storage.get(key, false);
-        if (!cancelled) {
-          if (res && res.value) setValue(JSON.parse(res.value));
-          setLoaded(true);
-        }
-      } catch (e) {
-        if (!cancelled) setLoaded(true);
-      }
-    })();
-    return () => { cancelled = true; };
+    try {
+      const raw = window.localStorage.getItem(key);
+      if (raw) setValue(JSON.parse(raw));
+    } catch (e) {
+      console.error("storage load failed", key, e);
+    }
+    setLoaded(true);
   }, [key]);
 
-  const persist = useCallback(async (next) => {
+  const persist = useCallback((next) => {
     setValue(next);
     try {
-      await window.storage.set(key, JSON.stringify(next), false);
+      window.localStorage.setItem(key, JSON.stringify(next));
     } catch (e) {
       console.error("storage save failed", key, e);
     }
@@ -437,17 +431,18 @@ ${schoolSummary}`;
     setPending([]);
     setLoading(true);
     try {
-      const response = await fetch("https://api.anthropic.com/v1/messages", {
+      const response = await fetch("/api/messages", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          model: "claude-sonnet-4-6",
+          model: "claude-sonnet-5",
           max_tokens: 1200,
           system: SYSTEM,
           messages: [...historyForApi, { role: "user", content: currentContent }],
         }),
       });
       const data = await response.json();
+      if (!response.ok) throw new Error(data?.error?.message || "request failed");
       const replyText = (data.content || [])
         .map((b) => (b.type === "text" ? b.text : ""))
         .filter(Boolean)
@@ -746,11 +741,11 @@ ${boardSummary}`;
     setChat(nextChat);
     setLoading(true);
     try {
-      const response = await fetch("https://api.anthropic.com/v1/messages", {
+      const response = await fetch("/api/messages", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          model: "claude-sonnet-4-6",
+          model: "claude-sonnet-5",
           max_tokens: 1500,
           system: SYSTEM,
           messages: nextChat.map((m) => ({ role: m.role, content: m.content })),
@@ -758,6 +753,7 @@ ${boardSummary}`;
         }),
       });
       const data = await response.json();
+      if (!response.ok) throw new Error(data?.error?.message || "request failed");
       const replyText = (data.content || [])
         .map((b) => (b.type === "text" ? b.text : ""))
         .filter(Boolean)
